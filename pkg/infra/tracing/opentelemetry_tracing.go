@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-kit/log/level"
 	"go.etcd.io/etcd/api/v3/version"
+	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	jaegerpropagator "go.opentelemetry.io/contrib/propagators/jaeger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -33,6 +34,7 @@ const (
 
 	jaegerPropagator string = "jaeger"
 	w3cPropagator    string = "w3c"
+	xrayPropagator   string = "xray"
 )
 
 type Opentelemetry struct {
@@ -95,7 +97,6 @@ func (ots *Opentelemetry) parseSettingsOpentelemetry() error {
 	ots.enabled = noopExporter
 
 	ots.address = section.Key("address").MustString("")
-	ots.propagation = section.Key("propagation").MustString("")
 	if ots.address != "" {
 		ots.enabled = jaegerExporter
 		return nil
@@ -180,6 +181,20 @@ func (ots *Opentelemetry) initOTLPTracerProvider() (*tracesdk.TracerProvider, er
 		return nil, err
 	}
 
+	if ots.propagation == xrayPropagator {
+		ots.log.Debug("using X-ray id geneator")
+		idg := xray.NewIDGenerator()
+		tp := tracesdk.NewTracerProvider(
+			tracesdk.WithBatcher(exp),
+			tracesdk.WithIDGenerator(idg),
+			tracesdk.WithSampler(tracesdk.ParentBased(
+				tracesdk.AlwaysSample(),
+			)),
+			tracesdk.WithResource(res),
+		)
+		return tp, nil
+	}
+
 	tp := tracesdk.NewTracerProvider(
 		tracesdk.WithBatcher(exp),
 		tracesdk.WithSampler(tracesdk.ParentBased(
@@ -227,6 +242,8 @@ func (ots *Opentelemetry) initOpentelemetryTracer() error {
 		otel.SetTextMapPropagator(propagation.TraceContext{})
 	case jaegerPropagator:
 		otel.SetTextMapPropagator(jaegerpropagator.Jaeger{})
+	case xrayPropagator:
+		otel.SetTextMapPropagator(xray.Propagator{})
 	default:
 		otel.SetTextMapPropagator(propagation.TraceContext{})
 	}
