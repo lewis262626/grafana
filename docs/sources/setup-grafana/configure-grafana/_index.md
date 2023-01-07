@@ -1669,7 +1669,7 @@ The host:port destination for reporting spans. (ex: `localhost:4317`)
 
 ### propagation
 
-The propagation specifies the text map propagation format.(ex: jaeger, w3c)
+The propagation specifies the text map propagation format.(ex: jaeger, w3c, xray)
 
 <hr>
 
